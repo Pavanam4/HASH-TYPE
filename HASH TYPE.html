@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HASH TYPE — Login + Typing Game + Results</title>
+  <style>
+    :root{
+      --bg1:#07050e; --bg2:#0c1020; --ink:#e5e7eb; --muted:#94a3b8; --accent:#67e8f9; --neon2:#a78bfa; --danger:#fb7185; --ok:#34d399;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%; margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial; color:var(--ink);
+      background:
+        radial-gradient(1200px 600px at 100% -10%, rgba(103,232,249,.18), transparent 60%),
+        radial-gradient(800px 600px at -10% 120%, rgba(167,139,250,.16), transparent 55%),
+        linear-gradient(120deg, var(--bg1), var(--bg2));
+      overflow:hidden}
+
+    /* custom cursor */
+    body{cursor:none}
+    .cursor-core{position:fixed; width:14px; height:14px; border-radius:50%; background:radial-gradient(circle at 30% 30%, #fff, var(--accent)); box-shadow:0 0 18px var(--accent),0 0 36px var(--neon2); pointer-events:none; transform:translate(-50%,-50%); z-index:8}
+    canvas#trail{position:fixed; inset:0; pointer-events:none; z-index:7}
+
+    /* NAV */
+    .topbar{position:fixed; top:10px; left:18px; right:18px; height:56px; display:flex; align-items:center; justify-content:space-between; z-index:5}
+    .brand{letter-spacing:.2em; text-transform:uppercase; color:var(--muted)}
+    .brand b{color:var(--accent); text-shadow:0 0 8px var(--accent)}
+    .nav{display:flex; gap:8px;}
+    .btn{padding:10px 14px; border:1px solid rgba(255,255,255,.18); border-radius:12px; background:linear-gradient(180deg, rgba(103,232,249,.22), rgba(167,139,250,.18)); color:#08111f; font-weight:800; letter-spacing:.06em; text-transform:uppercase; font-size:12px; box-shadow:0 6px 24px rgba(103,232,249,.22); cursor:none; position:relative; overflow:hidden}
+    .btn.secondary{background:rgba(255,255,255,.06); color:var(--ink); box-shadow:none}
+    .btn .shine{position:absolute; inset:0; background: radial-gradient(240px 80px at var(--mx,-100px) var(--my,-100px), rgba(255,255,255,.7), transparent 50%); mix-blend-mode:screen}
+    .btn[disabled]{opacity:.5; pointer-events:none}
+
+    /* PAGE WRAP */
+    .wrap{position:relative; display:grid; place-items:center; height:100vh; width:100vw; padding-top:76px}
+    .card{width:min(1100px,94vw); height:min(70vh,78vh); border-radius:22px; overflow:hidden; background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02)); border:1px solid rgba(255,255,255,.12); backdrop-filter: blur(14px) saturate(140%); box-shadow:0 10px 40px rgba(0,0,0,.35)}
+    .pages{display:flex; height:100%; width:300%; transform:translateX(var(--pageX, 0%)); transition: transform 700ms cubic-bezier(.22,.61,.36,1)}
+    .page{width:100%; padding:18px; display:grid; grid-template-rows:auto 1fr auto;}
+
+    /* LOGIN PAGE */
+    .login-grid{display:grid; grid-template-columns:1.2fr 1fr; gap:16px; height:100%}
+    .login-left{display:grid; align-content:center; padding:24px}
+    .logo{letter-spacing:.22em; text-transform:uppercase; color:var(--muted)}
+    .title{font-size: clamp(28px,3vw,48px); margin:6px 0 10px}
+    .lead{color:#cbd5e1; max-width:50ch}
+    .chips{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+    .chip{padding:8px 12px; border:1px solid rgba(255,255,255,.2); border-radius:999px; background:rgba(255,255,255,.04); font-size:12px; color:#dbeafe;}
+
+    form.auth{display:grid; gap:14px; align-content:center; padding:24px; border-left:1px solid rgba(255,255,255,.10)}
+    label{font-size:12px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase}
+    .input{border-radius:14px; padding:14px 16px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.16); color:var(--ink); outline:none; font-size:16px;}
+    .input:focus{border-color:var(--accent); box-shadow:0 0 0 6px rgba(103,232,249,.18), inset 0 0 24px rgba(103,232,249,.08)}
+    .status{font-size:12px; color:var(--muted)}
+
+    /* GAME PAGE */
+    .toolbar{display:flex; gap:8px; padding:12px; border-bottom:1px solid rgba(255,255,255,.08); align-items:center; justify-content:space-between}
+    .group{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+    .pill{padding:8px 12px; border:1px solid rgba(255,255,255,.2); border-radius:999px; background:rgba(255,255,255,.04); font-size:12px; color:#dbeafe; cursor:none}
+    .pill.sel{background:rgba(103,232,249,.15); border-color:var(--accent); color:#001b22}
+    .metrics{display:flex; gap:16px; align-items:center}
+    .tile{min-width:92px; text-align:center; padding:8px 10px; border:1px solid rgba(255,255,255,.12); border-radius:12px; background:rgba(255,255,255,.04)}
+    .tile b{display:block; font-size:22px}
+    .area{position:relative; padding:22px; height:100%; overflow:hidden}
+    .words{position:relative; height:100%; overflow:auto; padding:12px; line-height:1.8; font-size: clamp(18px, 2.3vw, 26px)}
+    .word{display:inline-block; margin:0 10px}
+    .char{display:inline-block; min-width:.55em}
+    .current .char{opacity:.9}
+    .hit{color:#86efac}
+    .miss{color:var(--danger)}
+    .extra{background: rgba(251,113,133,.12); color:var(--danger)}
+    .caret{position:absolute; width:2px; height:1.2em; background:var(--accent); box-shadow:0 0 12px var(--accent),0 0 20px var(--neon2); border-radius:2px; transform:translateY(.15em); animation:blink 1.1s steps(1,end) infinite}
+    @keyframes blink{50%{opacity:.2}}
+    .hidden-input{position:absolute; opacity:0; pointer-events:none}
+    .muted{color:var(--muted); font-size:12px}
+
+    /* RESULT PAGE */
+    .result-wrap{display:grid; place-items:center; height:100%; padding:22px}
+    .result-card{max-width:680px; width:100%; border:1px solid rgba(255,255,255,.12); border-radius:18px; padding:18px 18px 22px; background:rgba(255,255,255,.04); text-align:center}
+    .result-card h2{font-size: clamp(28px,3vw,44px); margin:8px 0}
+    .badge{display:inline-block; padding:6px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.18); margin-bottom:8px}
+    .good{color:var(--ok); border-color:rgba(52,211,153,.5);}
+    .bad{color:var(--danger); border-color:rgba(251,113,133,.5);}
+
+    @media (max-width: 900px){ .login-grid{grid-template-columns:1fr} form.auth{border-left:0; border-top:1px solid rgba(255,255,255,.10)} }
+    @media (prefers-reduced-motion: reduce){ .pages{transition:none} }
+  </style>
+</head>
+<body>
+  <canvas id="trail"></canvas>
+  <div class="cursor-core" id="cursor"></div>
+
+  <div class="topbar">
+    <div class="brand">HASH <b>TYPE</b></div>
+    <div class="nav">
+      <button class="btn secondary" id="navHome">Home<div class="shine"></div></button>
+      <button class="btn secondary" id="navPlay" disabled>Play<div class="shine"></div></button>
+      <button class="btn secondary" id="navResults" disabled>Results<div class="shine"></div></button>
+      <button class="btn" id="navLogout" disabled>Logout<div class="shine"></div></button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="card">
+      <div class="pages" id="pages">
+        <!-- PAGE 0: LOGIN -->
+        <section class="page" id="page-login">
+          <div class="login-grid">
+            <div class="login-left">
+              <div class="logo">HASH TYPE</div>
+              <h1 class="title">Welcome, Operator</h1>
+              <p class="lead">Authenticate to enter the <b>HASH TYPE</b> console. Then smash the keys and chase your high score.</p>
+              <div class="chips">
+                <span class="chip">Neon UI</span>
+                <span class="chip">Cursor trails</span>
+                <span class="chip">Satisfying sounds</span>
+              </div>
+            </div>
+            <form class="auth" id="loginForm">
+              <div>
+                <label>ID Code</label>
+                <input class="input" id="user" placeholder="e.g. ALPHA-7" required />
+              </div>
+              <div>
+                <label>Passkey</label>
+                <input class="input" id="pass" type="password" placeholder="••••••" required />
+              </div>
+              <button class="btn" type="submit">Sign In<div class="shine"></div></button>
+              <div class="status" id="loginStatus">Ready.</div>
+            </form>
+          </div>
+        </section>
+
+        <!-- PAGE 1: GAME -->
+        <section class="page" id="page-game">
+          <div class="toolbar">
+            <div class="group" aria-label="time select">
+              <span class="muted">Time</span>
+              <button class="pill sel" data-time="60">60s</button>
+              <button class="pill" data-time="30">30s</button>
+              <button class="pill" data-time="15">15s</button>
+            </div>
+            <div class="metrics">
+              <div class="tile"><span class="muted">WPM</span><b id="wpm">0</b></div>
+              <div class="tile"><span class="muted">Raw</span><b id="raw">0</b></div>
+              <div class="tile"><span class="muted">Acc</span><b id="acc">0%</b></div>
+              <div class="tile"><span class="muted">Time</span><b id="time">60</b></div>
+            </div>
+            <div class="group">
+              <button class="btn" id="restart">Restart<div class="shine"></div></button>
+              <button class="btn" id="toggleSound">Sound: On<div class="shine"></div></button>
+            </div>
+          </div>
+          <div class="area">
+            <input id="ghost" class="hidden-input" autocomplete="off" autocapitalize="off" spellcheck="false" />
+            <div class="words" id="words" tabindex="0" aria-label="typing area"></div>
+            <div class="caret" id="caret" style="left:12px; top:12px;"></div>
+          </div>
+          <div class="toolbar" style="border-top:1px solid rgba(255,255,255,.08)">
+            <div class="muted" id="stats">0/0 correct • 0 mistakes • 0 extra</div>
+            <div class="muted">Start typing to begin. <b>Esc</b> to restart. <b>Tab</b> focuses.</div>
+          </div>
+        </section>
+
+        <!-- PAGE 2: RESULT -->
+        <section class="page" id="page-result">
+          <div class="result-wrap">
+            <div class="result-card">
+              <span class="badge" id="badge"></span>
+              <h2 id="resultTitle">Results</h2>
+              <p class="muted" id="resultSubtitle">—</p>
+              <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:16px 0">
+                <div class="tile"><span class="muted">WPM</span><b id="rwpm">0</b></div>
+                <div class="tile"><span class="muted">Accuracy</span><b id="racc">0%</b></div>
+                <div class="tile"><span class="muted">Keystrokes</span><b id="rkeys">0</b></div>
+              </div>
+              <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap">
+                <button class="btn" id="playAgain">Play Again<div class="shine"></div></button>
+                <button class="btn secondary" id="backHome">Back to Home<div class="shine"></div></button>
+                <button class="btn secondary" id="logout2">Logout<div class="shine"></div></button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== helpers & navigation =====
+    const qs = (s, el=document)=>el.querySelector(s);
+    const qsa = (s, el=document)=>[...el.querySelectorAll(s)];
+    const pages = qs('#pages');
+    const go = (i)=>{ pages.style.setProperty('--pageX', `${-33.3333*i}%`); };
+
+    // shine follow
+    function wireShine(el){ el.addEventListener('mousemove', e=>{ const r=el.getBoundingClientRect(); el.style.setProperty('--mx',(e.clientX-r.left)+'px'); el.style.setProperty('--my',(e.clientY-r.top)+'px'); }); }
+    qsa('.btn').forEach(wireShine);
+
+    // ===== login =====
+    let loggedIn = false;
+    const loginForm = qs('#loginForm');
+    const loginStatus = qs('#loginStatus');
+    loginForm.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const u = qs('#user').value.trim(); const p = qs('#pass').value;
+      if(!u || p.length<4){ loginStatus.textContent='Invalid credentials'; beep('err'); return; }
+      loginStatus.textContent='Access granted'; beep('ok'); loggedIn=true; setNavState(); go(1); reset();
+    });
+
+    function setNavState(){ qs('#navPlay').disabled = !loggedIn; qs('#navResults').disabled = !loggedIn; qs('#navLogout').disabled=!loggedIn; }
+
+    // nav buttons
+    qs('#navHome').onclick=()=> go(0);
+    qs('#navPlay').onclick=()=>{ if(loggedIn){ go(1); reset(); }}
+    qs('#navResults').onclick=()=>{ if(loggedIn){ go(2); }}
+    qs('#navLogout').onclick=logout;
+
+    function logout(){ loggedIn=false; setNavState(); go(0); beep('click'); }
+    qs('#logout2').onclick=logout; qs('#backHome').onclick=()=>go(0); qs('#playAgain').onclick=()=>{ go(1); reset(); };
+
+    // ===== sounds (UI beeps + typing) =====
+    let actx;
+    function audio(){ actx = actx || new (window.AudioContext || window.webkitAudioContext)(); return actx; }
+    function osc({f=600, type='sine', dur=.08, gain=.05}){ const ctx=audio(); const o=ctx.createOscillator(); const g=ctx.createGain(); o.type=type; o.frequency.value=f; g.gain.setValueAtTime(gain, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+dur); o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime+dur+.02); }
+    function beep(kind){ if(kind==='ok') { osc({f:520,dur:.09}); setTimeout(()=>osc({f:760,dur:.11}),70);} else if(kind==='err'){ osc({f:160,type:'sawtooth',dur:.12}); } else { osc({f:420,type:'triangle',dur:.06}); }}
+
+    // ===== word bank =====
+    const BANK = `hash flow neon ghost prime vector quantum pixel dream ocean cloud night light type swift blue alpha nova echo cyber core logic power vivid keen orbit pulse rapid flare byte laser phase glide star drift craft synth orbit gyro frost flame prism sonic spark shade mystic aero turbo apex omega ignite zen ether crystal phantom tide flux beam code mesh shift blaze ion comet surge glide quake nova loom flare hush glyph loop seed scope vault mint dusk dawn ember luna halo node fractal array hash tone azure coal ivory maple lime pearl slate smoke steel jet cyber hush glam luxe velvet cedar amber cedar bold crisp vivid hush hush`.split(/\s+/);
+
+    // ===== game state =====
+    let TIME_LIMIT = 60; let timeLeft = TIME_LIMIT; let started=false, finished=false;
+    let idxWord=0, idxChar=0; let correct=0, incorrect=0, extra=0, totalTyped=0; let soundOn=true; let timerId=null;
+
+    const wordsEl = qs('#words'); const caretEl = qs('#caret'); const ghost = qs('#ghost');
+    const wpmEl = qs('#wpm'), rawEl = qs('#raw'), accEl = qs('#acc'), timeEl = qs('#time'), statsEl = qs('#stats');
+
+    // typing sounds
+    function clickSound(ok=true){ if(!soundOn) return; const ctx = audio(); const o = ctx.createOscillator(); const g = ctx.createGain(); o.type = ok? 'triangle':'sawtooth'; o.frequency.value = ok? (220+Math.random()*40):(120); g.gain.setValueAtTime(0.05, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.06); const f = ctx.createBiquadFilter(); f.type='highpass'; f.frequency.value=180; o.connect(f).connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 0.08); }
+    function wordDing(){ if(!soundOn) return; const ctx = audio(); const o = ctx.createOscillator(); const g = ctx.createGain(); o.type='sine'; o.frequency.setValueAtTime(480, ctx.currentTime); o.frequency.exponentialRampToValueAtTime(760, ctx.currentTime+0.12); g.gain.setValueAtTime(0.04, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.16); o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime+0.18); }
+
+    // render words
+    function genWords(n=220){ const arr=[]; for(let i=0;i<n;i++){ arr.push(BANK[Math.floor(Math.random()*BANK.length)]); }
+      wordsEl.innerHTML = arr.map((w,wi)=>`<span class="word" data-i="${wi}">` + w.split('').map((c,ci)=>`<span class="char" data-ci="${ci}">${c}</span>`).join('') + `</span>`).join(' ');
+      idxWord=0; idxChar=0; setCurrent(0); placeCaret(); }
+    function setCurrent(wi){ qsa('.word', wordsEl).forEach(w=>w.classList.remove('current')); const w = qsa('.word', wordsEl)[wi]; if (w) w.classList.add('current'); }
+    function placeCaret(){ const w = qsa('.word', wordsEl)[idxWord]; if(!w) return; const letters = qsa('.char', w); const target = letters[idxChar] || letters[letters.length-1]; const r = target.getBoundingClientRect(); const p = wordsEl.getBoundingClientRect(); caretEl.style.left = (r.left - p.left + (idxChar>=letters.length? r.width : 0)) + 'px'; caretEl.style.top  = (r.top - p.top) + 'px'; const off = r.top - p.top; if(off < 0 || off > wordsEl.clientHeight-40){ wordsEl.scrollTop += off - 80; } }
+
+    function updateStats(){ const elapsed = (TIME_LIMIT - timeLeft) || 1; const wpm = Math.round((correct/5) * (60/elapsed)); const raw = Math.round((totalTyped/5) * (60/elapsed)); const acc = Math.max(0, Math.min(100, Math.round((correct / Math.max(1, totalTyped)) * 100))); wpmEl.textContent = wpm; rawEl.textContent = raw; accEl.textContent = acc + '%'; statsEl.textContent = `${correct}/${totalTyped} correct • ${incorrect} mistakes • ${extra} extra`; }
+    function startTimer(){ if(timerId) return; timerId = setInterval(()=>{ timeLeft--; timeEl.textContent = timeLeft; if(timeLeft<=0){ finish(); } updateStats(); }, 1000); }
+
+    function type(ch){ if(finished) return; if(!started){ started=true; startTimer(); }
+      const w = qsa('.word', wordsEl)[idxWord]; if(!w) return; const letters = qsa('.char', w);
+      if(ch === ' '){ for(let i=idxChar;i<letters.length;i++){ letters[i].classList.add('miss'); incorrect++; } idxWord++; idxChar=0; setCurrent(idxWord); placeCaret(); wordDing(); return; }
+      if(ch === '\n'){ return; }
+      totalTyped++; const target = letters[idxChar];
+      if(!target){ const extraSpan = document.createElement('span'); extraSpan.textContent = ch; extraSpan.className = 'char extra'; w.appendChild(extraSpan); extra++; incorrect++; clickSound(false); placeCaret(); return; }
+      if(target.textContent === ch){ target.classList.add('hit'); correct++; clickSound(true); }
+      else{ target.classList.add('miss'); incorrect++; clickSound(false); }
+      idxChar++; placeCaret(); updateStats(); }
+
+    function backspace(){ if(finished) return; const w = qsa('.word', wordsEl)[idxWord]; if(!w) return; const letters = qsa('.char', w);
+      const last = w.lastElementChild; if(last && last.classList.contains('extra')){ w.removeChild(last); extra--; totalTyped=Math.max(0,totalTyped-1); placeCaret(); return; }
+      if(idxChar>0){ idxChar--; const t = letters[idxChar]; t.classList.remove('hit','miss'); if(totalTyped>0) totalTyped--; updateStats(); placeCaret(); }
+      else if(idxWord>0){ idxWord--; const pw = qsa('.word', wordsEl)[idxWord]; const pl = qsa('.char', pw).length; idxChar = pl; setCurrent(idxWord); placeCaret(); } }
+
+    function finish(){ finished = true; clearInterval(timerId); timerId=null; timeLeft=0; timeEl.textContent='0'; wordsEl.blur(); caretEl.style.opacity = .2; showResult(); }
+
+    function reset(){ started=false; finished=false; correct=0; incorrect=0; extra=0; totalTyped=0; timeLeft=TIME_LIMIT; timeEl.textContent=TIME_LIMIT; caretEl.style.opacity=1; genWords(); updateStats(); ghost.value=''; ghost.focus({preventScroll:true}); wordsEl.focus(); }
+
+    // focus & keys
+    qs('#page-game').addEventListener('pointerdown', ()=>ghost.focus());
+    window.addEventListener('keydown', (e)=>{
+      const onGame = pages.style.getPropertyValue('--pageX') === '-33.3333%';
+      if(!onGame) return; // type only on game page
+      if(e.key==='Tab'){ e.preventDefault(); ghost.focus(); return; }
+      if(e.key==='Escape'){ e.preventDefault(); reset(); return; }
+      if(e.ctrlKey || e.metaKey || e.altKey) return;
+      if(e.key==='Backspace'){ e.preventDefault(); backspace(); return; }
+      if(e.key===' '){ e.preventDefault(); type(' '); return; }
+      if(e.key.length===1){ e.preventDefault(); type(e.key); return; }
+    }, true);
+
+    // UI controls
+    qsa('.pill').forEach(p=>{ p.addEventListener('click', ()=>{ qsa('.pill').forEach(x=>x.classList.remove('sel')); p.classList.add('sel'); TIME_LIMIT=parseInt(p.dataset.time,10); reset(); }); });
+    const restartBtn = qs('#restart'); restartBtn.addEventListener('mousemove',(e)=>{ const r=restartBtn.getBoundingClientRect(); restartBtn.style.setProperty('--mx', (e.clientX-r.left)+'px'); restartBtn.style.setProperty('--my', (e.clientY-r.top)+'px'); }); restartBtn.addEventListener('click', reset);
+    const sndBtn = qs('#toggleSound'); sndBtn.addEventListener('mousemove',(e)=>{ const r=sndBtn.getBoundingClientRect(); sndBtn.style.setProperty('--mx',(e.clientX-r.left)+'px'); sndBtn.style.setProperty('--my',(e.clientY-r.top)+'px'); }); sndBtn.addEventListener('click', ()=>{ soundOn=!soundOn; sndBtn.firstChild.textContent = 'Sound: ' + (soundOn? 'On':'Off'); });
+
+    // ===== results =====
+    function showResult(){ const elapsed = Math.max(1, (TIME_LIMIT)); const wpm = Math.round((correct/5) * (60/elapsed)); const acc = Math.max(0, Math.min(100, Math.round((correct / Math.max(1, totalTyped)) * 100)));
+      qs('#rwpm').textContent = wpm; qs('#racc').textContent = acc + '%'; qs('#rkeys').textContent = totalTyped;
+      const win = acc >= 80; const badge = qs('#badge');
+      if(win){ badge.textContent='WIN'; badge.className='badge good'; qs('#resultTitle').textContent='You Won!'; qs('#resultSubtitle').textContent='Great accuracy — keep the streak'; }
+      else{ badge.textContent='FAILED'; badge.className='badge bad'; qs('#resultTitle').textContent='Try Again'; qs('#resultSubtitle').textContent='Accuracy below 80% — one more run!'; }
+      go(2);
+    }
+
+    // ===== fancy cursor trail =====
+    const trail = qs('#trail'); const tctx = trail.getContext('2d'); let mx=innerWidth/2, my=innerHeight/2, lx=mx, ly=my; const cursor=qs('#cursor');
+    const parts = Array.from({length:70},()=>({x:mx,y:my,vx:0,vy:0,life:60*Math.random()}));
+    addEventListener('mousemove',e=>{ mx=e.clientX; my=e.clientY; }); addEventListener('resize',()=>{ trail.width=innerWidth; trail.height=innerHeight; }); trail.width=innerWidth; trail.height=innerHeight;
+    (function loop(){ tctx.clearRect(0,0,trail.width,trail.height); lx += (mx-lx)*0.2; ly += (my-ly)*0.2; cursor.style.left=lx+'px'; cursor.style.top=ly+'px'; for(const p of parts){ const dx=mx-p.x, dy=my-p.y; p.vx+=dx*0.015; p.vy+=dy*0.015; p.vx*=0.82; p.vy*=0.82; p.x+=p.vx; p.y+=p.vy; p.life*=0.985; const a=Math.max(0,Math.min(1,p.life/60)); tctx.beginPath(); tctx.arc(p.x,p.y,2+(1-a)*2,0,Math.PI*2); tctx.fillStyle=`rgba(140,220,255,${0.25*a})`; tctx.fill(); } requestAnimationFrame(loop); })();
+
+    // mobile: show native cursor
+    if (matchMedia('(pointer: coarse)').matches){ document.body.style.cursor='auto'; cursor.style.display='none'; }
+  </script>
+</body>
+</html>
